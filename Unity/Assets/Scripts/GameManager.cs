@@ -22,6 +22,7 @@ public class GameManager : MonoSingleton<GameManager> {
     public Player[] players;
     public AudioClip[] emptyAnswers;
     public AudioClip audioBanquet;
+    public AudioClip clipOutro;
 
     [Header ("UI")]
     public CanvasGroup panelAnswers;
@@ -33,14 +34,16 @@ public class GameManager : MonoSingleton<GameManager> {
     public Image clockTimer;
     public List<ButtonAnswer> buttons;
     public CanvasGroup panelScores;
-    public CanvasGroup panelEnding;
     public Text scoresText0;
     public Text scoresText1;
     public Text scoresText2;
     public Text scoresText3;
 
+    public Text[] scoreGameTexts;
+
     [Header("Intro")]
     public List<Sprite> sprIntroShots;
+    public List<Sprite> sprExitShots;
     public List<float> introDurations;
     public Image imgIntroA, imgIntroB;
 
@@ -52,14 +55,13 @@ public class GameManager : MonoSingleton<GameManager> {
 
     [Header ("External Data")]
     public DialogDatabase dialogDatabase;
-    public AudioClip[] clipsQuestions;
     //public List<AudioClip> clipsAnswers;
 
     private AudioSource audioSource;
-    private int currentInterventionPos = 0;
+    public int currentInterventionPos = 0;
     private Intervention currentIntervention = null;
 
-    private Answer selectedD0, selectedD1, selectedD2, selectedD3;
+    public Answer selectedD0, selectedD1, selectedD2, selectedD3;
     private PointerEventData pd0, pd1, pd2, pd3;
 
     private float pX1, pX2, pX3, pX4, pY1, pY2, pY3, pY4;
@@ -128,6 +130,8 @@ public class GameManager : MonoSingleton<GameManager> {
     }
 
     void Update () {
+        if (Input.GetKeyDown(KeyCode.Escape)) Application.Quit();
+
         UpdateCursors();
 
         switch (currentGameState)
@@ -270,7 +274,7 @@ public class GameManager : MonoSingleton<GameManager> {
         fade.alpha = 1;
         AudioSource src = Camera.main.GetComponent<AudioSource>();
         yield return new WaitForSeconds(2.0f);
-        AudioClip a = Resources.Load<AudioClip>("Audio/champagne_rag_intro");
+        AudioClip a = Resources.Load<AudioClip>("Audio/full_intro");
         if (a != null)
         {
             src.clip = a;
@@ -295,7 +299,7 @@ public class GameManager : MonoSingleton<GameManager> {
                 imgIntroB.DOFade(1.0f, 1.0f).SetEase(Ease.Linear);
             }
 
-            if (i == 12) src.DOFade(0.0f, 3.0f);
+            //if (i == 12) src.DOFade(0.0f, 3.0f);
             yield return new WaitForSeconds(introDurations[i]);
         }
 
@@ -305,6 +309,7 @@ public class GameManager : MonoSingleton<GameManager> {
         fade.DOFade(0, 5.0f).SetEase(Ease.Linear).SetDelay(1.0f);
 
         yield return new WaitForSeconds(3.0f);
+        src.Stop();
         src.clip = audioBanquet;
         src.loop = true;
         src.Play();
@@ -321,6 +326,8 @@ public class GameManager : MonoSingleton<GameManager> {
 
     public IEnumerator PhaseEndingCoroutine()
     {
+        fade.DOFade(1, 1.0f);
+
         List<Player> pScores = new List<Player>();
         foreach (Player p in players) pScores.Add(p);
         System.Comparison<Player> cmp = new System.Comparison<Player>(Player.CompareId);
@@ -333,21 +340,50 @@ public class GameManager : MonoSingleton<GameManager> {
 
         panelScores.DOFade(1.0f, 1.0f);
 
+        AudioSource src = Camera.main.GetComponent<AudioSource>();
+        AudioClip a = Resources.Load<AudioClip>("Audio/full_outro");
+        if (a != null) src.PlayOneShot(a);
+
         yield return new WaitForSeconds(15.0f);
 
-        panelEnding.DOFade(1.0f, 1.0f);
+        for (int i = 0; i < sprExitShots.Count; i++)
+        {
+            Sprite s = sprExitShots[i];
+            if (i % 2 == 0)
+            {
+                MoveInHierarchy(imgIntroA.transform, i + 1);
+                imgIntroA.sprite = s;
+                imgIntroA.color = new Color(1, 1, 1, 0);
+                imgIntroA.DOFade(1.0f, 1.0f).SetEase(Ease.Linear);
+            }
+            else
+            {
+                MoveInHierarchy(imgIntroB.transform, i + 1);
+                imgIntroB.sprite = s;
+                imgIntroB.color = new Color(1, 1, 1, 0);
+                imgIntroB.DOFade(1.0f, 1.0f).SetEase(Ease.Linear);
+            }
 
-        yield return new WaitForSeconds(5.0f);
-        panelAnswers.DOFade(0.0f, 0.0f);
-        panelEnding.DOFade(0.0f, 1.0f);
-        yield return new WaitForSeconds(1.0f);
+            yield return new WaitForSeconds(5.0f);
+        }
+
+        panelScores.DOFade(0.0f, 0.0f);
+
+        imgIntroA.DOFade(0.0f, 1.0f).SetEase(Ease.Linear);
+        imgIntroB.DOFade(0.0f, 1.0f).SetEase(Ease.Linear);
+
+        yield return new WaitForSeconds(3.0f);
         SetGameState(GAME_STATE.INTRO);
     }
 
     public void PhaseIntervention()
     {
         fade.alpha = 0;
-        if (currentInterventionPos >= dialogDatabase.interventions.Count) SetGameState(GAME_STATE.ENDING);
+        if (currentInterventionPos >= dialogDatabase.interventions.Count)
+        {
+            SetGameState(GAME_STATE.ENDING);
+            return;
+        }
 
         panelAnswers.DOFade(0.0f, 0.5f);
         textDialogUICanvas.GetComponent<CanvasGroup>().DOFade(1.0f, 0.5f);
@@ -366,8 +402,8 @@ public class GameManager : MonoSingleton<GameManager> {
 
         for (int i = 0; i < intervention.questions_ids.Count; i++)
         {
-            LaunchQuestion(dialogDatabase.GetQuestion(intervention.questions_ids[i]));
-            yield return new WaitForSeconds(5.0f);
+            float x = LaunchQuestion(dialogDatabase.GetQuestion(intervention.questions_ids[i]));
+            yield return new WaitForSeconds(x);
             ClearAnimations();
         }
 
@@ -405,26 +441,26 @@ public class GameManager : MonoSingleton<GameManager> {
 
     public IEnumerator PhaseResultsCoroutine()
     {
-        if (selectedD0 == null) selectedD0 = muteAnswer;
-        if (selectedD1 == null) selectedD1 = muteAnswer;
-        if (selectedD2 == null) selectedD2 = muteAnswer;
-        if (selectedD3 == null) selectedD3 = muteAnswer;
+        if (selectedD0 == null || string.IsNullOrEmpty(selectedD0.text)) selectedD0 = muteAnswer;
+        if (selectedD1 == null || string.IsNullOrEmpty(selectedD1.text)) selectedD1 = muteAnswer;
+        if (selectedD2 == null || string.IsNullOrEmpty(selectedD2.text)) selectedD2 = muteAnswer;
+        if (selectedD3 == null || string.IsNullOrEmpty(selectedD3.text)) selectedD3 = muteAnswer;
 
-        LaunchAnswer(selectedD0, 0);
+        float x = LaunchAnswer(selectedD0, 0);
 
-        yield return new WaitForSeconds(5.0f);
+        yield return new WaitForSeconds(x);
 
-        LaunchAnswer(selectedD1, 1);
+        x = LaunchAnswer(selectedD1, 1);
 
-        yield return new WaitForSeconds(5.0f);
+        yield return new WaitForSeconds(x);
 
-        LaunchAnswer(selectedD2, 2);
+        x = LaunchAnswer(selectedD2, 2);
 
-        yield return new WaitForSeconds(5.0f);
+        yield return new WaitForSeconds(x);
 
-        LaunchAnswer(selectedD3, 3);
+        x = LaunchAnswer(selectedD3, 3);
 
-        yield return new WaitForSeconds(5.0f);
+        yield return new WaitForSeconds(x);
 
         SetMassNobleAnimation(Character.ANIMATION.NORMAL);
         SetGameState(GAME_STATE.INTERVENTION);
@@ -449,32 +485,44 @@ public class GameManager : MonoSingleton<GameManager> {
         for (int i = 0; i < players.Length; i++) players[i].SetAnimation(Character.ANIMATION.NORMAL);
     }
 
-    public void LaunchQuestion(Question d, int playerN = -1)
+    public float LaunchQuestion(Question d, int playerN = -1)
     {
         ClearDialog();
         ClearAnimations();
-        textDialogUI.DOText(d.text, dialogDuration).SetEase(Ease.Linear);
 
-        Character c = null;
-        c = nobles[(int)d.id_character - 1];
-        int id_audio = d.id_dialog;
-        if (clipsQuestions.Length > id_audio && clipsQuestions[id_audio] != null) audioSource.PlayOneShot(clipsQuestions[id_audio]);
+        if (d.id_character > 0)
+        {
+            Character c = null;
+            c = nobles[(int)d.id_character - 1];
+            textDialogUICanvas.DOColor(c.characterColor, 1.0f);
+            c.SetAnimation(Character.ANIMATION.TALKING);
+        }
 
-        textDialogUICanvas.DOColor(c.characterColor, 1.0f);
-        c.SetAnimation(Character.ANIMATION.TALKING);
+        int id_audio = 0;
+        string id_s = "";
+        id_audio = d.id_dialog;
+        id_s = id_audio.ToString();
+        if (id_audio < 10) id_s = "0" + id_s;
+        AudioClip a = Resources.Load<AudioClip>("Audio/questions/" + id_s);
+        if (a != null) audioSource.PlayOneShot(a);
+
+        float l = 5.0f;
+        if (a != null) l = a.length;
+        textDialogUI.DOText(d.text, l).SetEase(Ease.Linear);
+        return l + 1;
     }
 
-    public void LaunchAnswer(Answer d, int playerN = -1)
+    public float LaunchAnswer(Answer d, int playerN = -1)
     {
-        if (d == muteAnswer)
+        if (d == muteAnswer || d.id_dialog < 0)
         {
             LaunchDialogEmpty(playerN);
-            return;
+            return 3.0f;
         }
 
         ClearDialog();
         ClearAnimations();
-        textDialogUI.DOText(d.text, dialogDuration).SetEase(Ease.Linear);
+        textDialogUI.text = "";
 
         Character c = null;
         c = players[playerN];
@@ -482,7 +530,7 @@ public class GameManager : MonoSingleton<GameManager> {
         string id_s = "";
 
         int answer_pos = dialogDatabase.answers.IndexOf(d);
-        id_audio = answer_pos + playerN*4;
+        id_audio = answer_pos + playerN*16;
         id_s = id_audio.ToString();
         if (id_audio < 10) id_s = "0" + id_s;
         AudioClip a = Resources.Load<AudioClip>("Audio/Answers/" + id_s);
@@ -497,9 +545,20 @@ public class GameManager : MonoSingleton<GameManager> {
 
         int score = currentIntervention.scores[answer_pos];
         players[playerN].score += score;
-        if (score > 0) SetMassNobleAnimation(Character.ANIMATION.SURPRISED);
-        else if (score < 0) SetMassNobleAnimation(Character.ANIMATION.ANGRY);
+
+        string sT = "";
+        if (players[playerN].score >= 0) sT = "+";
+        sT += players[playerN].score.ToString();
+        scoreGameTexts[playerN].DOText(sT, 1.0f);
+
+        if (players[playerN].score > 0) SetMassNobleAnimation(Character.ANIMATION.SURPRISED);
+        else if (players[playerN].score < 0) SetMassNobleAnimation(Character.ANIMATION.ANGRY);
         else SetMassNobleAnimation(Character.ANIMATION.NORMAL);
+
+        float l = 5.0f;
+        if (a != null) l = a.length;
+        textDialogUI.DOText(d.text, l).SetEase(Ease.Linear);
+        return l + 1;
     }
 
     public void LaunchDialogEmpty(int playerN)
@@ -521,7 +580,15 @@ public class GameManager : MonoSingleton<GameManager> {
         textDialogUICanvas.DOColor(c.characterColor, 1.0f);
         c.SetAnimation(Character.ANIMATION.TALKING);
 
-        SetMassNobleAnimation(Character.ANIMATION.NORMAL);
+        int score = -2;
+        players[playerN].score += score;
+
+        string sT = "";
+        if (players[playerN].score >= 0) sT = "+";
+        sT += players[playerN].score.ToString();
+        scoreGameTexts[playerN].DOText(sT, 1.0f);
+
+        SetMassNobleAnimation(Character.ANIMATION.ANGRY);
         //c.SetAnimation(Character.ANIMATION.TALKING);
     }
 
