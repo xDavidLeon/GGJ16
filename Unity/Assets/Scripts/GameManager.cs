@@ -20,6 +20,8 @@ public class GameManager : MonoSingleton<GameManager> {
     [Header ("Game Elements")]
     public Noble[] nobles;
     public Player[] players;
+    public AudioClip[] emptyAnswers;
+    public AudioClip audioBanquet;
 
     [Header ("UI")]
     public CanvasGroup panelAnswers;
@@ -30,11 +32,23 @@ public class GameManager : MonoSingleton<GameManager> {
     public RectTransform clock;
     public Image clockTimer;
     public List<ButtonAnswer> buttons;
+    public CanvasGroup panelScores;
+    public CanvasGroup panelEnding;
+    public Text scoresText0;
+    public Text scoresText1;
+    public Text scoresText2;
+    public Text scoresText3;
+
+    [Header("Intro")]
+    public List<Sprite> sprIntroShots;
+    public List<float> introDurations;
+    public Image imgIntroA, imgIntroB;
 
     [Header ("Game Settings")]
     public GAME_STATE currentGameState = GAME_STATE.INTRO;
     public float dialogDuration = 3.0f;
     private float timerAnswerPhase = 0.0f;
+    public float answerPhaseDuration = 10.0f;
 
     [Header ("External Data")]
     public DialogDatabase dialogDatabase;
@@ -48,30 +62,33 @@ public class GameManager : MonoSingleton<GameManager> {
     private Answer selectedD0, selectedD1, selectedD2, selectedD3;
     private PointerEventData pd0, pd1, pd2, pd3;
 
-    public float pX1, pX2, pX3, pX4, pY1, pY2, pY3, pY4;
-    private List<RaycastResult> raycastResults0;
-    private List<RaycastResult> raycastResults1;
-    private List<RaycastResult> raycastResults2;
-    private List<RaycastResult> raycastResults3;
+    private float pX1, pX2, pX3, pX4, pY1, pY2, pY3, pY4;
+
+    private Answer muteAnswer;
 
     protected override void Awake()
     {
         base.Awake();
         if (GameManager.instance != this) return;
 
-        raycastResults0 = new List<RaycastResult>();
-        raycastResults1 = new List<RaycastResult>();
-        raycastResults2 = new List<RaycastResult>();
-        raycastResults3 = new List<RaycastResult>();
+        muteAnswer = new Answer();
+        muteAnswer.text = "...";
+        muteAnswer.id_dialog = -1;
 
         fade.alpha = 1;
         panelAnswers.alpha = 0;
         clockTimer.fillAmount = 0;
+
+        audioSource = GetComponent<AudioSource>();
     }
 
-	void Start ()
-    { 
-        audioSource = GetComponent<AudioSource>();
+    void Start ()
+    {
+        Init();
+    }
+
+    public void Init()
+    {
         textDialogUI.text = "";
 
         cursors[0].anchoredPosition = new Vector3(cursors[0].parent.GetComponent<RectTransform>().rect.width / 2 - 32, cursors[0].parent.GetComponent<RectTransform>().rect.height / 2 + 32, 0);
@@ -79,7 +96,12 @@ public class GameManager : MonoSingleton<GameManager> {
         cursors[2].anchoredPosition = new Vector3(cursors[2].parent.GetComponent<RectTransform>().rect.width / 2 - 32, cursors[2].parent.GetComponent<RectTransform>().rect.height / 2 - 32, 0);
         cursors[3].anchoredPosition = new Vector3(cursors[3].parent.GetComponent<RectTransform>().rect.width / 2 + 32, cursors[3].parent.GetComponent<RectTransform>().rect.height / 2 - 32, 0);
 
-        SetGameState(GAME_STATE.INTRO);
+        fade.alpha = 1;
+        clock.DOMoveY(3.5f, 0.0f);
+
+        for (int i = 0; i < players.Length; i++) players[i].score = 0;
+
+        SetGameState(currentGameState);
     }
 
     public void SetGameState(GAME_STATE state)
@@ -100,7 +122,7 @@ public class GameManager : MonoSingleton<GameManager> {
                 PhaseResults();
                 break;
             case GAME_STATE.ENDING:
-                PhaseIntro();
+                PhaseEnding();
                 break;
         }
     }
@@ -118,7 +140,7 @@ public class GameManager : MonoSingleton<GameManager> {
                 //EventSystem.current.RaycastAll(pd3, raycastResults3);
 
                 timerAnswerPhase += Time.deltaTime;
-                if (timerAnswerPhase >= 5.0f)
+                if (timerAnswerPhase >= answerPhaseDuration)
                 {
                     timerAnswerPhase = 5;
 
@@ -129,7 +151,7 @@ public class GameManager : MonoSingleton<GameManager> {
                     
                     SetGameState(GAME_STATE.RESULTS);
                 }
-                clockTimer.fillAmount = timerAnswerPhase / 5.0f;
+                clockTimer.fillAmount = timerAnswerPhase / answerPhaseDuration;
                 break;
         }
 
@@ -137,7 +159,6 @@ public class GameManager : MonoSingleton<GameManager> {
 
     private void UpdateCursors()
     {
-
         Vector3 cursor0pos = cursors[0].anchoredPosition;
         Vector3 cursor1pos = cursors[1].anchoredPosition;
         Vector3 cursor2pos = cursors[2].anchoredPosition;
@@ -233,64 +254,99 @@ public class GameManager : MonoSingleton<GameManager> {
 
     }
 
-    private void FocusButton(int id, Player p)
-    {
-        for (int i = 0; i < buttons.Count; i++)
-        {
-            if (buttons[i].id == id)
-            {
-                buttons[i].playersFocusing.Add(p);
-            }
-            else buttons[i].playersFocusing.Remove(p);
-        }
-    }
-
-    private void SelectButton(int id, Player p)
-    {
-        for (int i = 0; i < buttons.Count; i++)
-        {
-            if (buttons[i].id == id)
-            {
-                buttons[i].playerSelected = p;
-                buttons[i].SetColor(p.characterColor);
-                return;
-            }
-        }
-    }
-
-    private void ClearButtons()
-    {
-        for (int i = 0; i < buttons.Count; i++)
-        {
-            buttons[i].Reset();
-        }
-    }
-
-    private Vector3 VecClamped(ref Vector3 v)
-    {
-        v.x = Mathf.Clamp(v.x, 0.001f, Screen.width * 0.799f);
-        v.y = Mathf.Clamp(v.y, 0.001f, Screen.height * 0.799f);
-
-        return v;
-    }
-
     public void PhaseIntro()
     {
         StartCoroutine(PhaseIntroCoroutine());
     }
 
+    public void MoveInHierarchy(Transform t, int delta)
+    {
+        int index = t.GetSiblingIndex();
+        t.SetSiblingIndex(index + delta);
+    }
+
     public IEnumerator PhaseIntroCoroutine()
     {
         fade.alpha = 1;
-        fade.DOFade(0, 5.0f);
-        clock.DOMoveY(3.5f, 0.0f);
+        AudioSource src = Camera.main.GetComponent<AudioSource>();
+        yield return new WaitForSeconds(2.0f);
+        AudioClip a = Resources.Load<AudioClip>("Audio/champagne_rag_intro");
+        if (a != null)
+        {
+            src.clip = a;
+            src.loop = false;
+            src.Play();
+        }
+        for (int i = 0; i < sprIntroShots.Count; i++)
+        {
+            Sprite s = sprIntroShots[i];
+            if (i%2 == 0)
+            {
+                MoveInHierarchy(imgIntroA.transform, i+1);
+                imgIntroA.sprite = s;
+                imgIntroA.color = new Color(1, 1, 1, 0);
+                imgIntroA.DOFade(1.0f, 1.0f).SetEase(Ease.Linear);
+            }
+            else
+            {
+                MoveInHierarchy(imgIntroB.transform, i + 1);
+                imgIntroB.sprite = s;
+                imgIntroB.color = new Color(1, 1, 1, 0);
+                imgIntroB.DOFade(1.0f, 1.0f).SetEase(Ease.Linear);
+            }
+
+            if (i == 12) src.DOFade(0.0f, 3.0f);
+            yield return new WaitForSeconds(introDurations[i]);
+        }
+
+        imgIntroA.DOFade(0.0f, 1.0f).SetEase(Ease.Linear);
+        imgIntroB.DOFade(0.0f, 1.0f).SetEase(Ease.Linear);
+
+        fade.DOFade(0, 5.0f).SetEase(Ease.Linear).SetDelay(1.0f);
+
+        yield return new WaitForSeconds(3.0f);
+        src.clip = audioBanquet;
+        src.loop = true;
+        src.Play();
+        src.DOFade(1.0f, 3.0f);
+
+        yield return new WaitForSeconds(3.0f);
+        SetGameState(GAME_STATE.INTERVENTION);
+    }
+
+    public void PhaseEnding()
+    {
+        StartCoroutine(PhaseEndingCoroutine());
+    }
+
+    public IEnumerator PhaseEndingCoroutine()
+    {
+        List<Player> pScores = new List<Player>();
+        foreach (Player p in players) pScores.Add(p);
+        System.Comparison<Player> cmp = new System.Comparison<Player>(Player.CompareId);
+        pScores.Sort(cmp);
+
+        scoresText0.text = "El " + pScores[0].cname + " encontró pretendienta de alta cuna y jamás trabajó en su vida.";
+        scoresText1.text = "El " + pScores[1].cname + " fue invitado a jugar al pádel con el Señor Perro.";
+        scoresText2.text = "El " + pScores[2].cname + " nunca fue invitado a otros ritos nupciales.";
+        scoresText3.text = "El " + pScores[3].cname + " murió en un \"desafortunado\" accidente de caza semanas después.";
+
+        panelScores.DOFade(1.0f, 1.0f);
+
+        yield return new WaitForSeconds(15.0f);
+
+        panelEnding.DOFade(1.0f, 1.0f);
 
         yield return new WaitForSeconds(5.0f);
-        SetGameState(GAME_STATE.INTERVENTION);
+        panelAnswers.DOFade(0.0f, 0.0f);
+        panelEnding.DOFade(0.0f, 1.0f);
+        yield return new WaitForSeconds(1.0f);
+        SetGameState(GAME_STATE.INTRO);
     }
 
     public void PhaseIntervention()
     {
+        fade.alpha = 0;
         if (currentInterventionPos >= dialogDatabase.interventions.Count) SetGameState(GAME_STATE.ENDING);
 
         panelAnswers.DOFade(0.0f, 0.5f);
@@ -325,7 +381,9 @@ public class GameManager : MonoSingleton<GameManager> {
         panelAnswers.DOFade(1.0f, 0.5f);
         textDialogUICanvas.GetComponent<CanvasGroup>().DOFade(0.0f, 0.5f);
 
-        // Move clock?
+        float p = (float)dialogDatabase.interventions.IndexOf(currentIntervention) / (float) dialogDatabase.interventions.Count;
+        answerPhaseDuration = 10 - (p * 5);
+       
         clock.DOMoveY(2.55f, 1.0f);
 
         selectedD0 = null;
@@ -339,7 +397,6 @@ public class GameManager : MonoSingleton<GameManager> {
         panelAnswers.DOFade(0.0f, 3.0f);
         textDialogUICanvas.GetComponent<CanvasGroup>().DOFade(1.0f, 0.5f);
 
-        // Move clock?
         clock.DOMoveY(3.5f, 1.0f);
         clockTimer.fillAmount = 0;
 
@@ -348,31 +405,37 @@ public class GameManager : MonoSingleton<GameManager> {
 
     public IEnumerator PhaseResultsCoroutine()
     {
-        if (selectedD0 != null)
-            LaunchAnswer(selectedD0, 0);
-        else LaunchDialogEmpty(0);
+        if (selectedD0 == null) selectedD0 = muteAnswer;
+        if (selectedD1 == null) selectedD1 = muteAnswer;
+        if (selectedD2 == null) selectedD2 = muteAnswer;
+        if (selectedD3 == null) selectedD3 = muteAnswer;
+
+        LaunchAnswer(selectedD0, 0);
 
         yield return new WaitForSeconds(5.0f);
 
-        if (selectedD1 != null)
-            LaunchAnswer(selectedD1, 1);
-        else LaunchDialogEmpty(1);
+        LaunchAnswer(selectedD1, 1);
 
         yield return new WaitForSeconds(5.0f);
 
-        if (selectedD2 != null)
-            LaunchAnswer(selectedD2, 2);
-        else LaunchDialogEmpty(2);
+        LaunchAnswer(selectedD2, 2);
 
         yield return new WaitForSeconds(5.0f);
 
-        if (selectedD3 != null)
-            LaunchAnswer(selectedD3, 3);
-        else LaunchDialogEmpty(3);
+        LaunchAnswer(selectedD3, 3);
 
         yield return new WaitForSeconds(5.0f);
 
+        SetMassNobleAnimation(Character.ANIMATION.NORMAL);
         SetGameState(GAME_STATE.INTERVENTION);
+    }
+
+    public void SetMassNobleAnimation(Character.ANIMATION anim)
+    {
+        for (int i = 0; i < nobles.Length; i++)
+        {
+            nobles[i].SetAnimation(anim);
+        }
     }
 
     public void ClearDialog()
@@ -403,14 +466,24 @@ public class GameManager : MonoSingleton<GameManager> {
 
     public void LaunchAnswer(Answer d, int playerN = -1)
     {
+        if (d == muteAnswer)
+        {
+            LaunchDialogEmpty(playerN);
+            return;
+        }
+
         ClearDialog();
         ClearAnimations();
         textDialogUI.DOText(d.text, dialogDuration).SetEase(Ease.Linear);
 
         Character c = null;
         c = players[playerN];
-        int id_audio = dialogDatabase.answers.IndexOf(d) + playerN*4;
-        string id_s = id_audio.ToString();
+        int id_audio = 0;
+        string id_s = "";
+
+        int answer_pos = dialogDatabase.answers.IndexOf(d);
+        id_audio = answer_pos + playerN*4;
+        id_s = id_audio.ToString();
         if (id_audio < 10) id_s = "0" + id_s;
         AudioClip a = Resources.Load<AudioClip>("Audio/Answers/" + id_s);
         if (a != null) audioSource.PlayOneShot(a);
@@ -419,26 +492,82 @@ public class GameManager : MonoSingleton<GameManager> {
         textDialogUICanvas.DOColor(c.characterColor, 1.0f);
 
         c.SetAnimation(Character.ANIMATION.TALKING);
+
+        // Intervention score
+
+        int score = currentIntervention.scores[answer_pos];
+        players[playerN].score += score;
+        if (score > 0) SetMassNobleAnimation(Character.ANIMATION.SURPRISED);
+        else if (score < 0) SetMassNobleAnimation(Character.ANIMATION.ANGRY);
+        else SetMassNobleAnimation(Character.ANIMATION.NORMAL);
     }
 
     public void LaunchDialogEmpty(int playerN)
     {
         ClearDialog();
         ClearAnimations();
-        textDialogUI.DOText("...", dialogDuration).SetEase(Ease.Linear);
+        textDialogUI.DOText(muteAnswer.text, dialogDuration).SetEase(Ease.Linear);
 
         Character c = null;
 
             c = players[playerN];
+        AudioClip a = emptyAnswers[playerN];
             //int id_audio = dialogDatabase.answers.IndexOf((Answer)d) * playerN;
             //string id_s = id_audio.ToString();
             //if (id_audio < 10) id_s = "0" + id_s;
             //AudioClip a = Resources.Load<AudioClip>("Audio/Answers/" + id_s);
-            //if (a != null) audioSource.PlayOneShot(a);
+            if (a != null) audioSource.PlayOneShot(a);
             ////if (clipsAnswers.Count > id_audio && clipsAnswers[id_audio] != null) audioSource.PlayOneShot(clipsAnswers[id_audio]);
         textDialogUICanvas.DOColor(c.characterColor, 1.0f);
         c.SetAnimation(Character.ANIMATION.TALKING);
 
+        SetMassNobleAnimation(Character.ANIMATION.NORMAL);
         //c.SetAnimation(Character.ANIMATION.TALKING);
     }
+
+
+    private void FocusButton(int id, Player p)
+    {
+        for (int i = 0; i < buttons.Count; i++)
+        {
+            if (buttons[i].id == id)
+            {
+                buttons[i].playersFocusing.Add(p);
+            }
+            else buttons[i].playersFocusing.Remove(p);
+        }
+    }
+
+    private void SelectButton(int id, Player p)
+    {
+        for (int i = 0; i < buttons.Count; i++)
+        {
+            if (buttons[i].id == id)
+            {
+                buttons[i].playerSelected = p;
+                buttons[i].SetColor(p.characterColor);
+            }
+            else
+            {
+                if (buttons[i].playerSelected == p) buttons[i].playerSelected = null;
+            }
+        }
+    }
+
+    private void ClearButtons()
+    {
+        for (int i = 0; i < buttons.Count; i++)
+        {
+            buttons[i].Reset();
+        }
+    }
+
+    private Vector3 VecClamped(ref Vector3 v)
+    {
+        v.x = Mathf.Clamp(v.x, 0.001f, Screen.width * 0.799f);
+        v.y = Mathf.Clamp(v.y, 0.001f, Screen.height * 0.799f);
+
+        return v;
+    }
+
 }

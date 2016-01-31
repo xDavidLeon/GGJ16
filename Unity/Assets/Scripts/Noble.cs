@@ -3,8 +3,8 @@ using System.Collections;
 using DG.Tweening;
 
 public class Noble : Character {
-    protected Texture2D texAngry;
-    protected Texture2D texSurprise;
+    public Texture2D texAngry;
+    public Texture2D texSurprise;
 
     protected override void Awake()
     {
@@ -55,6 +55,8 @@ public class Noble : Character {
                 head.DOScale(originalScale, 1.0f);
                 head.transform.localRotation = Quaternion.identity;
 
+                head.GetComponent<MeshRenderer>().material.SetTexture("_MainTex", texFaceNeutral);
+
                 transform.position = originalPosition;
                 break;
             case ANIMATION.TALKING:
@@ -63,6 +65,8 @@ public class Noble : Character {
                 head.transform.localRotation = q;
                 head.DOPunchScale(punchScaleSize, punchScaleDuration, 1, 1).SetLoops(-1).SetId(this.GetInstanceID() + "s").SetEase(Ease.Linear);
                 head.DOPunchRotation(punchRotationScale, punchRotationDuration, 1, 1).SetLoops(-1).SetId(this.GetInstanceID() + "r").SetEase(Ease.Linear);
+
+                head.GetComponent<MeshRenderer>().material.SetTexture("_MainTex", texFaceNeutral);
 
                 StartCoroutine(StartShake());
                 break;
