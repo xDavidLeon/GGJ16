@@ -163,6 +163,7 @@ Shader "Hidden/FastBlur" {
 	
 	SubShader {
 	  ZTest Off Cull Off ZWrite Off Blend Off
+	  Fog { Mode off }  
 
 	// 0
 	Pass { 
@@ -171,6 +172,7 @@ Shader "Hidden/FastBlur" {
 		
 		#pragma vertex vert4Tap
 		#pragma fragment fragDownsample
+		#pragma fragmentoption ARB_precision_hint_fastest 
 		
 		ENDCG
 		 
@@ -185,6 +187,7 @@ Shader "Hidden/FastBlur" {
 		
 		#pragma vertex vertBlurVertical
 		#pragma fragment fragBlur8
+		#pragma fragmentoption ARB_precision_hint_fastest 
 		
 		ENDCG 
 		}	
@@ -198,6 +201,7 @@ Shader "Hidden/FastBlur" {
 		
 		#pragma vertex vertBlurHorizontal
 		#pragma fragment fragBlur8
+		#pragma fragmentoption ARB_precision_hint_fastest 
 		
 		ENDCG
 		}	
@@ -212,6 +216,7 @@ Shader "Hidden/FastBlur" {
 		
 		#pragma vertex vertBlurVerticalSGX
 		#pragma fragment fragBlurSGX
+		#pragma fragmentoption ARB_precision_hint_fastest 
 		
 		ENDCG
 		}	
@@ -225,6 +230,7 @@ Shader "Hidden/FastBlur" {
 		
 		#pragma vertex vertBlurHorizontalSGX
 		#pragma fragment fragBlurSGX
+		#pragma fragmentoption ARB_precision_hint_fastest 
 		
 		ENDCG
 		}	
